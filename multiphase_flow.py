@@ -1,16 +1,19 @@
 from __future__ import division
 import pandas as pd
 import numpy as np
+from collections import OrderedDict
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import train_test_split, cross_val_score, KFold, GridSearchCV
-from sklearn.linear_model import Ridge
+from sklearn.linear_model import Ridge, SGDRegressor
+from sklearn.svm import SVR
+from sklearn.kernel_ridge import KernelRidge
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.ensemble import RandomForestRegressor
 from scipy import special
 import scipy
 import matplotlib.pyplot as plt
-import time, os, math, warnings
+import time, os, math, warnings, xlsxwriter
 
 def load_data(filename):
     os.chdir('C:\\Users\\E460\\PycharmProjects\\untitled3\\Research\\csv files')
@@ -133,45 +136,66 @@ def regression(x_train, y_train):
     return clf
 
 def build_pipe(x_train,y_train,x_test,y_test):
-
-    clf_dt=DecisionTreeRegressor(random_state=0)
-    pipe_dt = Pipeline([('scl', StandardScaler()),
-			('clf', clf_dt)])
-    scores_dt=cross_val_score(clf_dt, x_train, y_train, cv=10)
-
-    clf_rf=RandomForestRegressor(n_estimators=2, max_depth=1,random_state=0)
-    pipe_rf = Pipeline([('scl', StandardScaler()),
-			('clf',clf_rf)])
-    scores_rf=cross_val_score(clf_rf, x_train, y_train, cv=10)
-
-    clf_ri=Ridge(alpha=.5)
-    pipe_et = Pipeline([('scl', StandardScaler()),
-			('clf', clf_ri)])
-    scores_et=cross_val_score(clf_ri, x_train, y_train, cv=10)
-
-
-    pipelines = [pipe_dt, pipe_rf, pipe_et]
-    pipe_dict = {0: 'Decision Tree', 1: 'Random Forest', 2: 'Extra Tree',3: "AdaBoost"}
-    for pipe in pipelines:
-	    pipe.fit(x_train, y_train)
-    cval_list=[np.average(scores_dt),np.average(scores_rf),np.average(scores_et)]
+    cval_list=[]
+    clf_list=[]
+    classifiers=[Ridge(),
+                 KernelRidge(),
+                 SGDRegressor(),
+                 SVR(),
+                 DecisionTreeRegressor(),
+                 RandomForestRegressor()]
+    param_grid=[{'clf__alpha':[0.1,1,2,5,10]},
+                [{'clf__alpha':[1,10,100,1000],'clf__kernel':['linear']},{'clf__alpha':[1,10,100,1000],'clf__kernel':['polynomial'],'clf__degree':[2,3,5]}],
+                {'clf__alpha':[0.001,0.01,0.1,1]},
+                [{'clf__C':[0.01,0.1,1,10,100],'clf__kernel':['linear','poly','rbf']}],
+                {'clf__max_depth': [None, 5, 10, 30, 50]},
+                [{'clf__n_estimators':[2, 3, 5, 10, 20],'clf__max_depth': [None, 5, 10, 20, 30, 50]}]]
+    for i in range(len(classifiers)):
+        pipe=Pipeline([('scl', StandardScaler()),
+                       ('clf',classifiers[i])])
+        clf=GridSearchCV(pipe,cv=3,param_grid=param_grid[i])
+        clf.fit(x_train, y_train)
+        clf_list.append(clf.best_estimator_)
+        cval_list.append(clf.best_score_)
 
     # Compare accuracies
-    for idx, val in enumerate(pipelines):
-        print('%s pipeline training accuracy: %.3f' % (pipe_dict[idx], val.score(x_train, y_train)))
-        print('%s pipeline dev accuracy: %.3f' % (pipe_dict[idx], cval_list[idx]))
-        print('%s pipeline test accuracy: %.3f \n' % (pipe_dict[idx], val.score(x_test, y_test)))
+    pipe_dict = {0: 'Ridge Regression',
+                 1: 'Kernel Ridge Regression',
+                 2: 'SGD Regression',
+                 3: 'Support Vector Regression',
+                 4: 'Decision Tree',
+                 5: 'Random Forest'}
+    train_score=[]
+    test_score=[]
+    for idx, val in enumerate(clf_list):
+        train_score.append(val.score(x_train, y_train))
+        test_score.append(val.score(x_test, y_test))
+        print('%s training set accuracy: %.3f' % (pipe_dict[idx], train_score[idx]))
+        print('%s dev set accuracy: %.3f' % (pipe_dict[idx], cval_list[idx]))
+        print('%s test set accuracy: %.3f \n' % (pipe_dict[idx], test_score[idx]))
 
     # Identify the most accurate model on test data
     best_acc = 0.0
     best_clf = 0
     best_pipe = ''
-    for idx, val in enumerate(pipelines):
+    for idx, val in enumerate(clf_list):
         if val.score(x_test, y_test) > best_acc:
             best_acc = val.score(x_test, y_test)
             best_pipe = val
             best_clf = idx
     print('Classifier with best accuracy: %s' % pipe_dict[best_clf])
+
+    # Constructing DataFrame output
+    dict_sum=OrderedDict([('Algorithms',[i for i in pipe_dict.values()]),
+                          ('Training Set Accuracy',train_score),
+                          ('Dev Set Accuracy',cval_list),
+                          ('Test Set Accuracy',test_score)])
+    df=pd.DataFrame.from_dict(dict_sum)
+
+    writer = pd.ExcelWriter('C:\\Users\\E460\\PycharmProjects\\untitled3\\Research\\results\\summary_report_temp.xlsx', engine='xlsxwriter')
+    df.to_excel(writer, index=False)
+    writer.save()
+    return df
 
 def derivatives(t,p_actu,p_pred):
     # Delta Pressure
@@ -308,6 +332,10 @@ def main():
 
     # Plotting Test Data (P and Q)
     plot_pressure_rates(X_test,y_test,y_pred_test,labelname='Test Data')
+
+    # Pipeline Analysis
+    alg_sum=build_pipe(x_train_temp,Y_train,x_test,y_test)
+    print(alg_sum)
 
     # Plot Derivatives
     derivatives(t_train[0:len(x_train)],y_train,y_pred_train)
