@@ -44,16 +44,16 @@ def load_data(filename):
     os.chdir('C:\\Users\\E460\\PycharmProjects\\untitled3\\Research\\csv files')
     df = pd.read_csv(filename)
 
-    t=df.loc[:,['TIME']] # Time in simulation: DAY
-    t*=24 # Converting time from DAY to HOUR
-    qo=df.loc[:,['WOPR:P1', 'WOPR:P2', 'WOPR:P3']]
-    qw=df.loc[:,['WWPR:P1', 'WWPR:P2', 'WWPR:P3']]
-    p=df.loc[:,['WBHP:P1']]
-    wc=df.loc[:,['WWCT:P1', 'WWCT:P2', 'WWCT:P3']]
-    x=pd.concat([t,qo,qw,wc],axis=1,join='inner')
+    t = df.loc[:,['TIME']] # Time in simulation: DAY
+    t* = 24 # Converting time from DAY to HOUR
+    qo = df.loc[:,['WOPR:P1', 'WOPR:P2', 'WOPR:P3']]
+    qw = df.loc[:,['WWPR:P1', 'WWPR:P2', 'WWPR:P3']]
+    p = df.loc[:,['WBHP:P1']]
+    wc = df.loc[:,['WWCT:P1', 'WWCT:P2', 'WWCT:P3']]
+    x = pd.concat([t,qo,qw,wc],axis=1,join='inner')
     return x,p
 
-def buildfeature(tset,qset):
+def buildfeature(tset, qset):
     """
     This function constructs features (including logarithmic and exponential features) 
     from raw flow rate data by capturing the convolution of flow rate change events into a matrix.
@@ -65,11 +65,11 @@ def buildfeature(tset,qset):
     """
     warnings.filterwarnings("ignore")
 
-    k=50            # Perm in mD
-    por=0.2         # Porosity in fraction
-    m=2             # Viscosity in cP
-    re=1000      # Re in ft
-    c=10**-5       # Total compressibility in 1/psi
+    k = 50            # Perm in mD
+    por = 0.2         # Porosity in fraction
+    m = 2             # Viscosity in cP
+    re = 1000      # Re in ft
+    c = 10**-5       # Total compressibility in 1/psi
 
     ### Initialization
     # creating time array
@@ -102,7 +102,7 @@ def buildfeature(tset,qset):
 
     # First Feature: q
     # Building 2nd, 3rd, and 4th Features
-    for i in range(1,numdata):
+    for i in range(1, numdata):
         for j in range(i-1):
             if j==0:
                 f2[i][j]=(qset[j])*np.log10(t[i])
@@ -143,21 +143,21 @@ def buildfeature(tset,qset):
                 f10[i][j]=(qset[j]-qset[j-1])*scipy.special.expi(-948*por*m*c*re**2/k/(t[i]-tset[j]))
                 if math.isnan(f10[i][j])== True or math.isinf(f10[i][j])== True or (t[i]-tset[j])<10**-6:
                     f10[i][j]=0
-    f2tot=np.sum(f2,axis=1)
-    f3tot=np.sum(f3,axis=1)
-    f4tot=np.sum(f4,axis=1)
-    f5tot=np.sum(f5,axis=1)
-    f6tot=np.sum(f6,axis=1)
-    f7tot=np.sum(f7,axis=1)
-    f8tot=np.sum(f8,axis=1)
-    f9tot=np.sum(f9,axis=1)
-    f10tot=np.sum(f10,axis=1)
+    f2tot = np.sum(f2,axis=1)
+    f3tot = np.sum(f3,axis=1)
+    f4tot = np.sum(f4,axis=1)
+    f5tot = np.sum(f5,axis=1)
+    f6tot = np.sum(f6,axis=1)
+    f7tot = np.sum(f7,axis=1)
+    f8tot = np.sum(f8,axis=1)
+    f9tot = np.sum(f9,axis=1)
+    f10tot = np.sum(f10,axis=1)
 
     features=[0,q,f2tot, f3tot, f4tot, f5tot, f6tot, f7tot, f8tot, f9tot, f10tot]
 
     return features
 
-def build_Ei_feature(tset,qset):
+def build_Ei_feature(tset, qset):
     """
     This function constructs exponential integral features  
     from raw flow rate data by capturing the convolution of flow rate change events into a matrix.
@@ -170,59 +170,59 @@ def build_Ei_feature(tset,qset):
     warnings.filterwarnings("ignore")
     ### Initialization
     # creating time array
-    tstep=1
-    tset=tset.tolist()
-    qset=qset.tolist()
+    tstep = 1
+    tset = tset.tolist()
+    qset = qset.tolist()
     numdata=int((round(max(tset)-min(tset))/tstep))+1
-    t=np.arange(0,round(max(tset)-min(tset))+1,tstep)
+    t= np.arange(0,round(max(tset)-min(tset))+1,tstep)
 
     # creating rate array
 
     # Initialize feature array
-    f1=np.zeros((numdata,int(len(tset))))
-    f2=np.zeros((numdata,int(len(tset))))
-    f3=np.zeros((numdata,int(len(tset))))
-    f4=np.zeros((numdata,int(len(tset))))
-    f5=np.zeros((numdata,int(len(tset))))
-    f6=np.zeros((numdata,int(len(tset))))
-    f7=np.zeros((numdata,int(len(tset))))
-    f8=np.zeros((numdata,int(len(tset))))
+    f1 = np.zeros((numdata,int(len(tset))))
+    f2 = np.zeros((numdata,int(len(tset))))
+    f3 = np.zeros((numdata,int(len(tset))))
+    f4 = np.zeros((numdata,int(len(tset))))
+    f5 = np.zeros((numdata,int(len(tset))))
+    f6 = np.zeros((numdata,int(len(tset))))
+    f7 = np.zeros((numdata,int(len(tset))))
+    f8 = np.zeros((numdata,int(len(tset))))
 
     # First Feature: q
     # Building 2nd, 3rd, and 4th Features
     for i in range(1,numdata):
         for j in range(i-1):
             if j==0:
-                f1[i][j]=qset[j]*scipy.special.expi(-10**-85/t[i])
-                f2[i][j]=qset[j]*scipy.special.expi(-2*10**-85/t[i])
-                f3[i][j]=qset[j]*scipy.special.expi(-3*10**-85/t[i])
-                f4[i][j]=qset[j]*scipy.special.expi(-4*10**-85/t[i])
-                f5[i][j]=qset[j]*scipy.special.expi(-5*10**-85/t[i])
-                f6[i][j]=qset[j]*scipy.special.expi(-6*10**-85/t[i])
-                f7[i][j]=qset[j]*scipy.special.expi(-7*10**-85/t[i])
-                f8[i][j]=qset[j]*scipy.special.expi(-8*10**-85/t[i])
+                f1[i][j] = qset[j]*scipy.special.expi(-10**-85/t[i])
+                f2[i][j] = qset[j]*scipy.special.expi(-2*10**-85/t[i])
+                f3[i][j] = qset[j]*scipy.special.expi(-3*10**-85/t[i])
+                f4[i][j] = qset[j]*scipy.special.expi(-4*10**-85/t[i])
+                f5[i][j] = qset[j]*scipy.special.expi(-5*10**-85/t[i])
+                f6[i][j] = qset[j]*scipy.special.expi(-6*10**-85/t[i])
+                f7[i][j] = qset[j]*scipy.special.expi(-7*10**-85/t[i])
+                f8[i][j] = qset[j]*scipy.special.expi(-8*10**-85/t[i])
             else:
-                f1[i][j]=(qset[j]-qset[j-1])*scipy.special.expi(-10**-85/(t[i]-tset[j]))
-                f2[i][j]=(qset[j]-qset[j-1])*scipy.special.expi(-2*10**-85/(t[i]-tset[j]))
-                f3[i][j]=(qset[j]-qset[j-1])*scipy.special.expi(-3*10**-85/(t[i]-tset[j]))
-                f4[i][j]=(qset[j]-qset[j-1])*scipy.special.expi(-4*10**-85/(t[i]-tset[j]))
-                f5[i][j]=(qset[j]-qset[j-1])*scipy.special.expi(-5*10**-85/(t[i]-tset[j]))
-                f6[i][j]=(qset[j]-qset[j-1])*scipy.special.expi(-6*10**-85/(t[i]-tset[j]))
-                f7[i][j]=(qset[j]-qset[j-1])*scipy.special.expi(-7*10**-85/(t[i]-tset[j]))
-                f8[i][j]=(qset[j]-qset[j-1])*scipy.special.expi(-8*10**-85/(t[i]-tset[j]))
+                f1[i][j] = (qset[j]-qset[j-1])*scipy.special.expi(-10**-85/(t[i]-tset[j]))
+                f2[i][j] = (qset[j]-qset[j-1])*scipy.special.expi(-2*10**-85/(t[i]-tset[j]))
+                f3[i][j] = (qset[j]-qset[j-1])*scipy.special.expi(-3*10**-85/(t[i]-tset[j]))
+                f4[i][j] = (qset[j]-qset[j-1])*scipy.special.expi(-4*10**-85/(t[i]-tset[j]))
+                f5[i][j] = (qset[j]-qset[j-1])*scipy.special.expi(-5*10**-85/(t[i]-tset[j]))
+                f6[i][j] = (qset[j]-qset[j-1])*scipy.special.expi(-6*10**-85/(t[i]-tset[j]))
+                f7[i][j] = (qset[j]-qset[j-1])*scipy.special.expi(-7*10**-85/(t[i]-tset[j]))
+                f8[i][j] = (qset[j]-qset[j-1])*scipy.special.expi(-8*10**-85/(t[i]-tset[j]))
 
 
-    f1tot=np.sum(f1,axis=1)
-    f2tot=np.sum(f2,axis=1)
-    f3tot=np.sum(f3,axis=1)
-    f4tot=np.sum(f4,axis=1)
-    f5tot=np.sum(f5,axis=1)
-    f6tot=np.sum(f6,axis=1)
-    f7tot=np.sum(f7,axis=1)
-    f8tot=np.sum(f8,axis=1)
+    f1tot = np.sum(f1,axis=1)
+    f2tot = np.sum(f2,axis=1)
+    f3tot = np.sum(f3,axis=1)
+    f4tot = np.sum(f4,axis=1)
+    f5tot = np.sum(f5,axis=1)
+    f6tot = np.sum(f6,axis=1)
+    f7tot = np.sum(f7,axis=1)
+    f8tot = np.sum(f8,axis=1)
 
 
-    features=[0,f1tot,f2tot, f3tot, f4tot, f5tot, f6tot, f7tot, f8tot]
+    features=[0, f1tot, f2tot, f3tot, f4tot, f5tot, f6tot, f7tot, f8tot]
 
     return features
 
@@ -233,7 +233,7 @@ def structure_features(X_train):
     :param X_train: matrix of raw data
     :return: matrix of constructed features
     """
-    t_train=X_train['TIME']
+    t_train = X_train['TIME']
 
     # Build features
     fa_tr=buildfeature(t_train,X_train['WOPR:P1'])
@@ -263,12 +263,12 @@ def structure_Ei_features(X_train):
     t_train=X_train['TIME']
 
     # Build features
-    fa_tr=build_Ei_feature(t_train,X_train['WOPR:P1'])
-    fb_tr=build_Ei_feature(t_train,X_train['WOPR:P2'])
-    fc_tr=build_Ei_feature(t_train,X_train['WOPR:P3'])
-    fa_wr_tr=build_Ei_feature(t_train,X_train['WWPR:P1'])
-    fb_wr_tr=build_Ei_feature(t_train,X_train['WWPR:P2'])
-    fc_wr_tr=build_Ei_feature(t_train,X_train['WWPR:P3'])
+    fa_tr = build_Ei_feature(t_train,X_train['WOPR:P1'])
+    fb_tr = build_Ei_feature(t_train,X_train['WOPR:P2'])
+    fc_tr = build_Ei_feature(t_train,X_train['WOPR:P3'])
+    fa_wr_tr = build_Ei_feature(t_train,X_train['WWPR:P1'])
+    fb_wr_tr = build_Ei_feature(t_train,X_train['WWPR:P2'])
+    fc_wr_tr = build_Ei_feature(t_train,X_train['WWPR:P3'])
 
     # Arrange features
     x_train=pd.DataFrame({'fa1':fa_tr[1], 'fa2':fa_tr[2], 'fa3':fa_tr[3], 'fa4':fa_tr[4], 'fa5':fa_tr[5], 'fa6':fa_tr[6],'fa7':fa_tr[7], 'fa8':fa_tr[8],
@@ -288,7 +288,7 @@ def regression(x_train, y_train):
                      [{'clf__hidden_layer_sizes':[(10,),(50,),(100,),(500,)],
                        'clf__solver':['lbfgs']}],
                      cv=3)
-    clf=GridSearchCV(Ridge(),[{'alpha':[0.01,0.1,1,10,100,1000]}],cv=3)
+    clf = GridSearchCV(Ridge(),[{'alpha':[0.01,0.1,1,10,100,1000]}], cv=3)
 
     clf.fit(x_train, y_train)
     clf=clf.best_estimator_
@@ -306,13 +306,13 @@ def build_pipe(X_train,y_train,X_test,y_test):
     :param X_test: matrix of features in test set
     :param y_test: vector of label in test set
     """
-    x_train=structure_features(X_train)
-    x_test=structure_features(X_test)
-    cval_list=[]
-    clf_list=[]
-    train_score=[]
-    test_score=[]
-    scenario='14 features'
+    x_train = structure_features(X_train)
+    x_test = structure_features(X_test)
+    cval_list = []
+    clf_list = []
+    train_score = []
+    test_score = []
+    scenario = '14 features'
     pipe_dict = {0: 'Ridge Regression',
                  1: 'Kernel Ridge Regression',
                  2: 'SGD Regression',
@@ -323,7 +323,7 @@ def build_pipe(X_train,y_train,X_test,y_test):
                  7: 'Gradient Boosting',
                  8: 'k-nearest Neighbors',
                  9: 'Neural Network'}
-    classifiers=[Ridge(),
+    classifiers = [Ridge(),
                  KernelRidge(),
                  SGDRegressor(),
                  SVR(kernel='linear'),
@@ -333,7 +333,7 @@ def build_pipe(X_train,y_train,X_test,y_test):
                  GradientBoostingRegressor(),
                  KNeighborsRegressor(),
                  MLPRegressor(solver='lbfgs',activation='identity')]
-    param_grid=[{'clf__alpha':[0.01,0.1,1,2,5,10,100,1000]},
+    param_grid = [{'clf__alpha':[0.01,0.1,1,2,5,10,100,1000]},
                 [{'clf__alpha':[0.01,0.1,1,2,5,10,100,1000],'clf__kernel':['linear']},{'clf__alpha':[0.1,0.1,1,10,100,1000],'clf__kernel':['polynomial'],'clf__degree':[2,3,5]}],
                 {'clf__alpha':[0.001,0.01,0.1,1,2,5,10,100,1000]},
                 [{'clf__C':[10000]}],
@@ -347,9 +347,9 @@ def build_pipe(X_train,y_train,X_test,y_test):
                                             (100,20,50),(1000,50,100),(1000,200,1000),(1000,50,400,600)]}]
 
     for i in range(len(classifiers)):
-        pipe=Pipeline([('scl', StandardScaler()),
+        pipe = Pipeline([('scl', StandardScaler()),
                        ('clf',classifiers[i])])
-        clf=GridSearchCV(pipe,cv=4,param_grid=param_grid[i])
+        clf = GridSearchCV(pipe,cv=4,param_grid=param_grid[i])
         clf.fit(x_train, y_train)
         clf_list.append(clf.best_estimator_)
         cval_list.append(clf.best_score_)
@@ -378,17 +378,17 @@ def build_pipe(X_train,y_train,X_test,y_test):
     print('Classifier with best accuracy: %s' % pipe_dict[best_clf])
 
     # Saving clf details
-    dict_clf=pd.DataFrame.from_dict(OrderedDict([('Algorithms',[str(i) for i in clf_list])]))
+    dict_clf = pd.DataFrame.from_dict(OrderedDict([('Algorithms',[str(i) for i in clf_list])]))
     writer = pd.ExcelWriter('C:\\Users\\E460\\PycharmProjects\\untitled3\\Research\\results\\Far LowWC\\summary_clf_temp_'+scenario+'.xlsx', engine='xlsxwriter')
     dict_clf.to_excel(writer, index=False)
     writer.save()
 
     # Constructing DataFrame output
-    dict_sum=OrderedDict([('Algorithms',[i for i in pipe_dict.values()]),
+    dict_sum = OrderedDict([('Algorithms',[i for i in pipe_dict.values()]),
                           ('Training Set Accuracy',train_score),
                           ('Dev Set Accuracy',cval_list),
                           ('Test Set Accuracy',test_score)])
-    df=pd.DataFrame.from_dict(dict_sum)
+    df = pd.DataFrame.from_dict(dict_sum)
     bar_chart(df,'C:\\Users\\E460\\PycharmProjects\\untitled3\\Research\\results\\Far LowWC\\'+scenario+'.png')
 
     writer = pd.ExcelWriter('C:\\Users\\E460\\PycharmProjects\\untitled3\\Research\\results\\Far LowWC\\summary_report_temp_'+scenario+'.xlsx', engine='xlsxwriter')
@@ -421,14 +421,14 @@ def build_pipe(X_train,y_train,X_test,y_test):
 
     return df
 
-def bar_chart(df,filename):
+def bar_chart(df, filename):
     """This function obtains scores from a csv file and visualizes them in a bar chart"""
-    n_groups=df.shape[0]
-    index_df=df.loc[:,['Algorithms']]
-    index_name=[index_df.values[i][0] for i in range(index_df.shape[0])]
-    train_acc=df.loc[:,['Training Set Accuracy']]
-    dev_acc=df.loc[:,['Dev Set Accuracy']]
-    test_acc=df.loc[:,['Test Set Accuracy']]
+    n_groups = df.shape[0]
+    index_df = df.loc[:,['Algorithms']]
+    index_name = [index_df.values[i][0] for i in range(index_df.shape[0])]
+    train_acc = df.loc[:,['Training Set Accuracy']]
+    dev_acc = df.loc[:,['Dev Set Accuracy']]
+    test_acc = df.loc[:,['Test Set Accuracy']]
     # create plot
     fig, ax = plt.subplots()
     index = np.arange(n_groups)
@@ -461,8 +461,8 @@ def bar_chart(df,filename):
 def derivatives(clf):
     """Calculates pressure derivatives given a classifier"""
     df = pd.read_csv('C:\\Users\\E460\\PycharmProjects\\untitled3\\Research\\csv files\\derivatives.csv')
-    t=df.loc[:,['TIME']].as_matrix() # Time in simulation: DAY
-    t*=24 # Converting time from DAY to HOUR
+    t = df.loc[:,['TIME']].as_matrix() # Time in simulation: DAY
+    t* = 24 # Converting time from DAY to HOUR
     x_test_der=df.loc[:,['fa1', 'fa2', 'fa3','fa4','fa10','faw1', 'faw2', 'faw3','faw4','faw10',
                          'fb1', 'fb2', 'fb3','fb4', 'fb10','fbw1', 'fbw2', 'fbw3','fbw4', 'fbw10',
                          'fc1', 'fc2', 'fc3','fc4', 'fc10','fcw1', 'fcw2', 'fcw3','fcw4', 'fcw10']]
@@ -470,13 +470,13 @@ def derivatives(clf):
     p_pred=clf.predict(x_test_der)
 
     # Delta Pressure
-    p_act=df.loc[:,['WBHP:P1']].as_matrix()
-    dp_act=abs(p_act[0]-p_act)
-    dp_pred=abs(p_act[0]-p_pred)
+    p_act = df.loc[:,['WBHP:P1']].as_matrix()
+    dp_act = abs(p_act[0]-p_act)
+    dp_pred = abs(p_act[0]-p_pred)
 
     # Derivatives
-    p_der_act=np.zeros(len(p_act)-2)
-    p_der_pred=np.zeros(len(p_pred)-2)
+    p_der_act = np.zeros(len(p_act)-2)
+    p_der_pred = np.zeros(len(p_pred)-2)
     for i in range(1,len(p_act)-1):
         p_der_act[i-1]=t[i]/(t[i+1]-t[i-1])*abs(dp_act[i+1]-dp_act[i-1])
         p_der_pred[i-1]=t[i]/(t[i+1]-t[i-1])*abs(dp_pred[i+1]-dp_pred[i-1])
@@ -486,7 +486,7 @@ def derivatives(clf):
     # Plot Test Data (P and Q)
     plot_pressure_rates(df,df.loc[:,['WBHP:P1']],p_pred,labelname='Testing')
 
-def derivatives2(clf,X_test,x_test,y_test):
+def derivatives2(clf, X_test, x_test, y_test):
     """This function calculates pressure derivatives given a classifier"""
     t=X_test['TIME']
     p_pred=clf.predict(x_test)
@@ -519,12 +519,12 @@ def plot_derivatives(t,dp_act,dp_pred,p_der_act,p_der_pred):
     plt.grid()
 
 
-def plot_pressure(t,p_actual,p_pred,title,color):
+def plot_pressure(t, p_actual, p_pred, title, color):
     """This function plots actual and predicted bottom hole pressure"""
     # Plotting pwf v time
     plt.plot(t, p_actual, 'k-',linewidth=3,label='Actual Pwf')
 
-    if title=='Training Data':
+    if title == 'Training Data':
         plt.plot(t[0:int(0.7*p_pred.shape[0])], p_pred[0:int(0.7*p_pred.shape[0])], 'rx',markeredgecolor=color,label=title)
         plt.plot(t[int(0.7*p_pred.shape[0]):], p_pred[int(0.7*p_pred.shape[0]):], 'yx',markeredgecolor='orange',label='Dev Set')
     else:
@@ -591,9 +591,9 @@ def main():
     clf = regression(x_train, y_train)
 
     # Predict features
-    y_pred_train=clf.predict(x_train)
-    y_pred_dev=clf.predict(x_dev)
-    y_pred_test=clf.predict(x_test)
+    y_pred_train = clf.predict(x_train)
+    y_pred_dev = clf.predict(x_dev)
+    y_pred_test = clf.predict(x_test)
 
     # Measure running time
     print("Completed in %s seconds" % (time.time() - start_time))
@@ -603,7 +603,7 @@ def main():
     print('Training Set Score: %1.4f' % (clf.score(x_train,y_train)))
 
     # Cross-val / Dev Set Error Calculation
-    scores=cross_val_score(clf, x_train, y_train, cv=4)
+    scores = cross_val_score(clf, x_train, y_train, cv=4)
     print("Dev Set Score (Cval): {:.3f} (std: {:.3f})".format(scores.mean(),scores.std()),end="\n\n" )
     # [float(score) for score in scores] # printing each fold score
     print('Dev Set Score: %1.4f' % (clf.score(x_dev,y_dev)))
