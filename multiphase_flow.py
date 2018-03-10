@@ -625,7 +625,7 @@ def main():
     print(alg_sum)
 
     # Plot Derivatives
-    derivatives(clf)
+    #derivatives(clf)
 
     # Load Classifier from file
     # clf = joblib.load('filename.pkl')
