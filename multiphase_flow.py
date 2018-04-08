@@ -15,6 +15,7 @@ from sklearn.neural_network import MLPRegressor
 from sklearn.externals import joblib
 from scipy import special
 import scipy
+import scikits.bootstrap as bootstrap
 import matplotlib.pyplot as plt
 import time, os, math, warnings
 
@@ -36,31 +37,31 @@ The scope of this project includes:
 
 def load_data(filename):
     """
-    This function reads csv file from the given url and extracts time-series data of oil & water rate, 
+    This function reads csv file from the given url and extracts time-series data of oil & water rate,
     pressure, and water cut.
     :param filename: the url of csv file (stored in GitHub)
-    :return: x: matrix of flowrates in all wells and p: bottom hole pressure of observation well
+    :return: t: vector of time; qo: matrix of oil rate in all wells; qo: matrix of water rate in all wells;
+            and p: matrix of bottom hole pressure in all wells
     """
     os.chdir('C:\\Users\\E460\\PycharmProjects\\untitled3\\Research\\csv files')
     df = pd.read_csv(filename)
 
-    t = df.loc[:,['TIME']] # Time in simulation: DAY
-    t* = 24 # Converting time from DAY to HOUR
-    qo = df.loc[:,['WOPR:P1', 'WOPR:P2', 'WOPR:P3']]
-    qw = df.loc[:,['WWPR:P1', 'WWPR:P2', 'WWPR:P3']]
-    p = df.loc[:,['WBHP:P1']]
-    wc = df.loc[:,['WWCT:P1', 'WWCT:P2', 'WWCT:P3']]
-    x = pd.concat([t,qo,qw,wc],axis=1,join='inner')
-    return x,p
+    t = df.loc[:, ['TIME']] # Time in simulation: DAY
+    t *= 24 # Converting time from DAY to HOUR
+    qo = df.loc[:, ['WOPR:P1', 'WOPR:P2', 'WOPR:P3']]
+    qw = df.loc[:, ['WWPR:P1', 'WWPR:P2', 'WWPR:P3']]
+    p = df.loc[:, ['WBHP:P1', 'WBHP:P2', 'WBHP:P3']]
+    wc = df.loc[:, ['WWCT:P1', 'WWCT:P2', 'WWCT:P3']]
+    return t, qo, qw, wc, p
 
 def buildfeature(tset, qset):
     """
-    This function constructs features (including logarithmic and exponential features) 
+    This function constructs features (including logarithmic and exponential features)
     from raw flow rate data by capturing the convolution of flow rate change events into a matrix.
-    
+
     :param qset: list of flow rate change events
     :param tset: list of time corresponding to above flow rate change events
-    
+
     :return: matrix of features
     """
     warnings.filterwarnings("ignore")
@@ -73,98 +74,98 @@ def buildfeature(tset, qset):
 
     ### Initialization
     # creating time array
-    tstep=1
-    tset=tset.tolist()
-    qset=qset.tolist()
-    numdata=int((round(max(tset)-min(tset))/tstep))+1
-    t=np.arange(0,round(max(tset)-min(tset))+1,tstep)
+    tstep = 1
+    tset = tset.tolist()
+    qset = qset.tolist()
+    numdata = int((round(max(tset)-min(tset))/tstep))+1
+    t = np.arange(0, round(max(tset)-min(tset))+1, tstep)
 
     # creating rate array
-    q=[]
+    q = []
     for i in range(len(tset)):
-        if i==0: # Note: make sure tset starts from 0
-            y=np.array([0])
+        if i == 0: # Note: make sure tset starts from 0
+            y = np.array([0])
         else:
-            y=np.full(int(round((tset[i]-tset[i-1])/tstep)),qset[i-1])
-        q=np.concatenate((q,y))
+            y = np.full(int(round((tset[i]-tset[i-1])/tstep)), qset[i-1])
+        q = np.concatenate((q, y))
 
 
     # Initialize feature array
-    f2=np.zeros((numdata,int(len(tset))))
-    f3=np.zeros((numdata,int(len(tset))))
-    f4=np.zeros((numdata,int(len(tset))))
-    f5=np.zeros((numdata,int(len(tset))))
-    f6=np.zeros((numdata,int(len(tset))))
-    f7=np.zeros((numdata,int(len(tset))))
-    f8=np.zeros((numdata,int(len(tset))))
-    f9=np.zeros((numdata,int(len(tset))))
-    f10=np.zeros((numdata,int(len(tset))))
+    f2 = np.zeros((numdata,int(len(tset))))
+    f3 = np.zeros((numdata,int(len(tset))))
+    f4 = np.zeros((numdata,int(len(tset))))
+    f5 = np.zeros((numdata,int(len(tset))))
+    f6 = np.zeros((numdata,int(len(tset))))
+    f7 = np.zeros((numdata,int(len(tset))))
+    f8 = np.zeros((numdata,int(len(tset))))
+    f9 = np.zeros((numdata,int(len(tset))))
+    f10 = np.zeros((numdata,int(len(tset))))
 
     # First Feature: q
     # Building 2nd, 3rd, and 4th Features
-    for i in range(1, numdata):
+    for i in range(1,numdata):
         for j in range(i-1):
-            if j==0:
-                f2[i][j]=(qset[j])*np.log10(t[i])
-                f3[i][j]=(qset[j])*(t[i])
-                f4[i][j]=(qset[j])/(t[i])
-                f5[i][j]=qset[j]/np.exp(t[i])
-                f6[i][j]=qset[j]/np.exp(t[i])*np.log10(t[i])
-                f7[i][j]=qset[j]/np.exp(2*t[i])*np.log10(t[i])
-                f8[i][j]=qset[j]/np.exp(3*t[i])*np.log10(t[i])
-                f9[i][j]=qset[j]/(t[i])/np.exp(t[i])
-                f10[i][j]=qset[j]*scipy.special.expi(-948*por*m*c*re**2/k/t[i])
+            if j == 0:
+                f2[i][j] = (qset[j])*np.log10(t[i])
+                f3[i][j] = (qset[j])*(t[i])
+                f4[i][j] = (qset[j])/(t[i])
+                f5[i][j] = qset[j]/np.exp(t[i])
+                f6[i][j] = qset[j]/np.exp(t[i])*np.log10(t[i])
+                f7[i][j] = qset[j]/np.exp(2*t[i])*np.log10(t[i])
+                f8[i][j] = qset[j]/np.exp(3*t[i])*np.log10(t[i])
+                f9[i][j] = qset[j]/(t[i])/np.exp(t[i])
+                f10[i][j] = qset[j]*scipy.special.expi(-948*por*m*c*re**2/k/t[i])
             else:
-                f2[i][j]=(qset[j]-qset[j-1])*np.log10(t[i]-tset[j])
-                if math.isnan(f2[i][j])== True or math.isinf(f2[i][j])== True or (t[i]-tset[j])<10**-6:
-                    f2[i][j]=0
-                f3[i][j]=(qset[j]-qset[j-1])*(t[i]-tset[j])
-                if math.isnan(f3[i][j])== True or math.isinf(f3[i][j])== True or (t[i]-tset[j])<10**-6:
-                    f3[i][j]=0
-                f4[i][j]=(qset[j]-qset[j-1])/(t[i]-tset[j])
-                if math.isnan(f4[i][j])== True or math.isinf(f4[i][j])== True or (t[i]-tset[j])<10**-6:
-                    f4[i][j]=0
+                f2[i][j] = (qset[j]-qset[j-1])*np.log10(t[i]-tset[j])
+                if math.isnan(f2[i][j]) == True or math.isinf(f2[i][j]) == True or (t[i]-tset[j])<10**-6:
+                    f2[i][j] = 0
+                f3[i][j] = (qset[j]-qset[j-1])*(t[i]-tset[j])
+                if math.isnan(f3[i][j]) == True or math.isinf(f3[i][j]) == True or (t[i]-tset[j])<10**-6:
+                    f3[i][j] = 0
+                f4[i][j] = (qset[j]-qset[j-1])/(t[i]-tset[j])
+                if math.isnan(f4[i][j]) == True or math.isinf(f4[i][j]) == True or (t[i]-tset[j])<10**-6:
+                    f4[i][j] = 0
                 #f5[i][j]=(qset[j]-qset[j-1])*scipy.special.expi(-948*por*m*c*re**2/k/(t[i]-tset[j]))
-                f5[i][j]=(qset[j]-qset[j-1])/np.exp((t[i]-tset[j]))
-                if math.isnan(f5[i][j])== True or math.isinf(f5[i][j])== True or (t[i]-tset[j])<10**-6:
-                    f5[i][j]=0
-                f6[i][j]=(qset[j]-qset[j-1])/np.exp(t[i]-tset[j])*(np.log10(t[i]-tset[j]))
-                if math.isnan(f6[i][j])== True or math.isinf(f6[i][j])== True or (t[i]-tset[j])<10**-6:
-                    f6[i][j]=0
-                f7[i][j]=(qset[j]-qset[j-1])/np.exp(2*(t[i]-tset[j]))*(np.log10(t[i]-tset[j]))
-                if math.isnan(f7[i][j])== True or math.isinf(f7[i][j])== True or (t[i]-tset[j])<10**-6:
-                    f7[i][j]=0
-                f8[i][j]=(qset[j]-qset[j-1])/np.exp(3*(t[i]-tset[j]))*(np.log10(t[i]-tset[j]))
-                if math.isnan(f8[i][j])== True or math.isinf(f8[i][j])== True or (t[i]-tset[j])<10**-6:
-                    f8[i][j]=0
-                f9[i][j]=(qset[j]-qset[j-1])/((t[i]-tset[j]))/(np.exp(t[i]-tset[j]))
-                if math.isnan(f8[i][j])== True or math.isinf(f9[i][j])== True or (t[i]-tset[j])<10**-6:
-                    f9[i][j]=0
-                f10[i][j]=(qset[j]-qset[j-1])*scipy.special.expi(-948*por*m*c*re**2/k/(t[i]-tset[j]))
-                if math.isnan(f10[i][j])== True or math.isinf(f10[i][j])== True or (t[i]-tset[j])<10**-6:
-                    f10[i][j]=0
-    f2tot = np.sum(f2,axis=1)
-    f3tot = np.sum(f3,axis=1)
-    f4tot = np.sum(f4,axis=1)
-    f5tot = np.sum(f5,axis=1)
-    f6tot = np.sum(f6,axis=1)
-    f7tot = np.sum(f7,axis=1)
-    f8tot = np.sum(f8,axis=1)
-    f9tot = np.sum(f9,axis=1)
-    f10tot = np.sum(f10,axis=1)
+                f5[i][j] = (qset[j]-qset[j-1])/np.exp((t[i]-tset[j]))
+                if math.isnan(f5[i][j]) == True or math.isinf(f5[i][j]) == True or (t[i]-tset[j])<10**-6:
+                    f5[i][j] = 0
+                f6[i][j] = (qset[j]-qset[j-1])/np.exp(t[i]-tset[j])*(np.log10(t[i]-tset[j]))
+                if math.isnan(f6[i][j])== True or math.isinf(f6[i][j]) == True or (t[i]-tset[j])<10**-6:
+                    f6[i][j] = 0
+                f7[i][j] = (qset[j]-qset[j-1])/np.exp(2*(t[i]-tset[j]))*(np.log10(t[i]-tset[j]))
+                if math.isnan(f7[i][j]) == True or math.isinf(f7[i][j]) == True or (t[i]-tset[j])<10**-6:
+                    f7[i][j] = 0
+                f8[i][j] = (qset[j]-qset[j-1])/np.exp(3*(t[i]-tset[j]))*(np.log10(t[i]-tset[j]))
+                if math.isnan(f8[i][j]) == True or math.isinf(f8[i][j]) == True or (t[i]-tset[j])<10**-6:
+                    f8[i][j] = 0
+                f9[i][j] = (qset[j]-qset[j-1])/((t[i]-tset[j]))/(np.exp(t[i]-tset[j]))
+                if math.isnan(f8[i][j]) == True or math.isinf(f9[i][j]) == True or (t[i]-tset[j])<10**-6:
+                    f9[i][j] = 0
+                f10[i][j] = (qset[j]-qset[j-1])*scipy.special.expi(-948*por*m*c*re**2/k/(t[i]-tset[j]))
+                if math.isnan(f10[i][j]) == True or math.isinf(f10[i][j]) == True or (t[i]-tset[j])<10**-6:
+                    f10[i][j] = 0
+    f2tot = np.sum(f2, axis=1)
+    f3tot = np.sum(f3, axis=1)
+    f4tot = np.sum(f4, axis=1)
+    f5tot = np.sum(f5, axis=1)
+    f6tot = np.sum(f6, axis=1)
+    f7tot = np.sum(f7, axis=1)
+    f8tot = np.sum(f8, axis=1)
+    f9tot = np.sum(f9, axis=1)
+    f10tot = np.sum(f10, axis=1)
 
-    features=[0,q,f2tot, f3tot, f4tot, f5tot, f6tot, f7tot, f8tot, f9tot, f10tot]
+    features=[0, q, f2tot, f3tot, f4tot, f5tot, f6tot, f7tot, f8tot, f9tot, f10tot]
 
     return features
 
-def build_Ei_feature(tset, qset):
+def build_Ei_feature(tset,qset):
     """
-    This function constructs exponential integral features  
+    This function constructs exponential integral features
     from raw flow rate data by capturing the convolution of flow rate change events into a matrix.
-    
+
     :param qset: list of flow rate change events
     :param tset: list of time corresponding to above flow rate change events
-    
+
     :return: matrix of features
     """
     warnings.filterwarnings("ignore")
@@ -173,8 +174,8 @@ def build_Ei_feature(tset, qset):
     tstep = 1
     tset = tset.tolist()
     qset = qset.tolist()
-    numdata=int((round(max(tset)-min(tset))/tstep))+1
-    t= np.arange(0,round(max(tset)-min(tset))+1,tstep)
+    numdata = int((round(max(tset)-min(tset))/tstep))+1
+    t = np.arange(0,round(max(tset)-min(tset))+1,tstep)
 
     # creating rate array
 
@@ -222,7 +223,7 @@ def build_Ei_feature(tset, qset):
     f8tot = np.sum(f8,axis=1)
 
 
-    features=[0, f1tot, f2tot, f3tot, f4tot, f5tot, f6tot, f7tot, f8tot]
+    features=[0,f1tot,f2tot, f3tot, f4tot, f5tot, f6tot, f7tot, f8tot]
 
     return features
 
@@ -233,74 +234,236 @@ def structure_features(X_train):
     :param X_train: matrix of raw data
     :return: matrix of constructed features
     """
-    t_train = X_train['TIME']
+    t_train=X_train['TIME']
 
     # Build features
-    fa_tr=buildfeature(t_train,X_train['WOPR:P1'])
-    fb_tr=buildfeature(t_train,X_train['WOPR:P2'])
-    fc_tr=buildfeature(t_train,X_train['WOPR:P3'])
-    fa_wr_tr=buildfeature(t_train,X_train['WWPR:P1'])
-    fb_wr_tr=buildfeature(t_train,X_train['WWPR:P2'])
-    fc_wr_tr=buildfeature(t_train,X_train['WWPR:P3'])
+    fa_tr = buildfeature(t_train, X_train['WOPR:P1'])
+    fb_tr = buildfeature(t_train, X_train['WOPR:P2'])
+    fc_tr = buildfeature(t_train, X_train['WOPR:P3'])
+    fa_wr_tr = buildfeature(t_train, X_train['WWPR:P1'])
+    fb_wr_tr = buildfeature(t_train, X_train['WWPR:P2'])
+    fc_wr_tr = buildfeature(t_train, X_train['WWPR:P3'])
 
     # Arrange features
-    x_train=pd.DataFrame({'fa1':fa_tr[1], 'fa2':fa_tr[2], 'fa3':fa_tr[3], 'fa4':fa_tr[4],'fa6':fa_tr[6],'fa7':fa_tr[7],'fa8':fa_tr[8],
-                          'fb1':fb_tr[1], 'fb2':fb_tr[2], 'fb3':fb_tr[3], 'fb4':fb_tr[4],'fb6':fb_tr[6],'fb7':fb_tr[7],'fb8':fb_tr[8],
-                          'fc1':fc_tr[1], 'fc2':fc_tr[2], 'fc3':fc_tr[3], 'fc4':fc_tr[4],'fc6':fc_tr[6],'fc7':fc_tr[7],'fc8':fc_tr[8],
-                          'faw1':fa_wr_tr[1], 'faw2':fa_wr_tr[2], 'faw3':fa_wr_tr[3], 'faw4':fa_wr_tr[4],'faw6':fa_wr_tr[6],'faw7':fa_wr_tr[7],'faw8':fa_wr_tr[8],
-                          'fbw1':fb_wr_tr[1], 'fbw2':fb_wr_tr[2], 'fbw3':fb_wr_tr[3], 'fbw4':fb_wr_tr[4],'fbw6':fb_wr_tr[6],'fbw7':fb_wr_tr[7],'fbw8':fb_wr_tr[8],
-                          'fcw1':fc_wr_tr[1], 'fcw2':fc_wr_tr[2], 'fcw3':fc_wr_tr[3], 'fcw4':fc_wr_tr[4],'fcw6':fc_wr_tr[6],'fcw7':fc_wr_tr[7],'fcw8':fc_wr_tr[8]})
+    x_train=pd.DataFrame({'fa1':fa_tr[1], 'fa2':fa_tr[2], 'fa3':fa_tr[3], 'fa4':fa_tr[4], 'fa6':fa_tr[6], 'fa7':fa_tr[7], 'fa8':fa_tr[8],
+                          'fb1':fb_tr[1], 'fb2':fb_tr[2], 'fb3':fb_tr[3], 'fb4':fb_tr[4], 'fb6':fb_tr[6], 'fb7':fb_tr[7], 'fb8':fb_tr[8],
+                          'fc1':fc_tr[1], 'fc2':fc_tr[2], 'fc3':fc_tr[3], 'fc4':fc_tr[4], 'fc6':fc_tr[6], 'fc7':fc_tr[7], 'fc8':fc_tr[8],
+                          'faw1':fa_wr_tr[1], 'faw2':fa_wr_tr[2], 'faw3':fa_wr_tr[3], 'faw4':fa_wr_tr[4], 'faw6':fa_wr_tr[6], 'faw7':fa_wr_tr[7], 'faw8':fa_wr_tr[8],
+                          'fbw1':fb_wr_tr[1], 'fbw2':fb_wr_tr[2], 'fbw3':fb_wr_tr[3], 'fbw4':fb_wr_tr[4], 'fbw6':fb_wr_tr[6], 'fbw7':fb_wr_tr[7], 'fbw8':fb_wr_tr[8],
+                          'fcw1':fc_wr_tr[1], 'fcw2':fc_wr_tr[2], 'fcw3':fc_wr_tr[3], 'fcw4':fc_wr_tr[4], 'fcw6':fc_wr_tr[6], 'fcw7':fc_wr_tr[7], 'fcw8':fc_wr_tr[8]})
 
     return x_train
 
 def structure_Ei_features(X_train):
     """
-    This function builds multiple Ei-function features (by calling function 'build_Ei_features()') 
+    This function builds multiple Ei-function features (by calling function 'build_Ei_features()')
     from each flow rate and stacks them horizontally into a new feature matrix.
     :param X_train: matrix of raw data
     :return: matrix of constructed features
     """
-    t_train=X_train['TIME']
+    t_train = X_train['TIME']
 
     # Build features
-    fa_tr = build_Ei_feature(t_train,X_train['WOPR:P1'])
-    fb_tr = build_Ei_feature(t_train,X_train['WOPR:P2'])
-    fc_tr = build_Ei_feature(t_train,X_train['WOPR:P3'])
-    fa_wr_tr = build_Ei_feature(t_train,X_train['WWPR:P1'])
-    fb_wr_tr = build_Ei_feature(t_train,X_train['WWPR:P2'])
-    fc_wr_tr = build_Ei_feature(t_train,X_train['WWPR:P3'])
+    fa_tr = build_Ei_feature(t_train, X_train['WOPR:P1'])
+    fb_tr = build_Ei_feature(t_train, X_train['WOPR:P2'])
+    fc_tr = build_Ei_feature(t_train, X_train['WOPR:P3'])
+    fa_wr_tr = build_Ei_feature(t_train, X_train['WWPR:P1'])
+    fb_wr_tr = build_Ei_feature(t_train, X_train['WWPR:P2'])
+    fc_wr_tr = build_Ei_feature(t_train, X_train['WWPR:P3'])
 
     # Arrange features
     x_train=pd.DataFrame({'fa1':fa_tr[1], 'fa2':fa_tr[2], 'fa3':fa_tr[3], 'fa4':fa_tr[4], 'fa5':fa_tr[5], 'fa6':fa_tr[6],'fa7':fa_tr[7], 'fa8':fa_tr[8],
-                          'fb1':fb_tr[1], 'fb2':fb_tr[2],'fb3':fb_tr[3], 'fb4':fb_tr[4], 'fb5':fb_tr[5], 'fb6':fb_tr[6], 'fb7':fb_tr[7], 'fb8':fb_tr[8],
-                          'fc1':fc_tr[1], 'fc2':fc_tr[2],'fc3':fc_tr[3], 'fc4':fc_tr[4], 'fc5':fc_tr[5], 'fc6':fc_tr[6], 'fc7':fc_tr[7], 'fc8':fc_tr[8],
-                          'faw1':fa_wr_tr[1], 'faw2':fa_wr_tr[2],'faw3':fa_wr_tr[3], 'faw4':fa_wr_tr[4], 'faw5':fa_wr_tr[5], 'faw6':fa_wr_tr[6],'faw7':fa_wr_tr[7], 'faw8':fa_wr_tr[8],
-                          'fbw1':fb_wr_tr[1], 'fbw2':fb_wr_tr[2],'fbw3':fb_wr_tr[3], 'fbw4':fb_wr_tr[4], 'fbw5':fb_wr_tr[5], 'fbw6':fb_wr_tr[6], 'fbw7':fb_wr_tr[7], 'fbw8':fb_wr_tr[8],
-                          'fcw1':fc_wr_tr[1], 'fcw2':fc_wr_tr[2],'fcw3':fc_wr_tr[3], 'fcw4':fc_wr_tr[4], 'fcw5':fc_wr_tr[5], 'fcw6':fc_wr_tr[6], 'fcw7':fc_wr_tr[7], 'fcw8':fc_wr_tr[8]})
+                          'fb1':fb_tr[1], 'fb2':fb_tr[2], 'fb3':fb_tr[3], 'fb4':fb_tr[4], 'fb5':fb_tr[5], 'fb6':fb_tr[6], 'fb7':fb_tr[7], 'fb8':fb_tr[8],
+                          'fc1':fc_tr[1], 'fc2':fc_tr[2], 'fc3':fc_tr[3], 'fc4':fc_tr[4], 'fc5':fc_tr[5], 'fc6':fc_tr[6], 'fc7':fc_tr[7], 'fc8':fc_tr[8],
+                          'faw1':fa_wr_tr[1], 'faw2':fa_wr_tr[2], 'faw3':fa_wr_tr[3], 'faw4':fa_wr_tr[4], 'faw5':fa_wr_tr[5], 'faw6':fa_wr_tr[6],'faw7':fa_wr_tr[7], 'faw8':fa_wr_tr[8],
+                          'fbw1':fb_wr_tr[1], 'fbw2':fb_wr_tr[2], 'fbw3':fb_wr_tr[3], 'fbw4':fb_wr_tr[4], 'fbw5':fb_wr_tr[5], 'fbw6':fb_wr_tr[6], 'fbw7':fb_wr_tr[7], 'fbw8':fb_wr_tr[8],
+                          'fcw1':fc_wr_tr[1], 'fcw2':fc_wr_tr[2], 'fcw3':fc_wr_tr[3], 'fcw4':fc_wr_tr[4], 'fcw5':fc_wr_tr[5], 'fcw6':fc_wr_tr[6], 'fcw7':fc_wr_tr[7], 'fcw8':fc_wr_tr[8]})
+    return x_train
+
+def structure_features_qpred(X_train):
+    """
+    This function builds multiple features (by calling function 'buildfeatures()') from each well's bottom hole pressure
+    and stacks them horizontally into a new feature matrix.
+    :param X_train: matrix of bottom hole pressure (BHP), oil rate, and water rate
+    :return: matrix of constructed features convoluted BHP and raw total rate
+    """
+    t_train = X_train['TIME']
+
+    # Build features
+    fa_tr = buildfeature(t_train, X_train['WBHP:P1'])
+    fb_tr = buildfeature(t_train, X_train['WBHP:P2'])
+    fc_tr = buildfeature(t_train, X_train['WBHP:P3'])
+    qt1 = X_train['WOPR:P1'] + X_train['WWPR:P1']
+    qt2 = X_train['WOPR:P2'] + X_train['WWPR:P2']
+    qt3 = X_train['WOPR:P3'] + X_train['WWPR:P3']
+
+    # Arrange features
+    x_train = pd.DataFrame({'fa1':fa_tr[1], 'fa2':fa_tr[2], 'fa3':fa_tr[3], 'fa4':qt1,
+                          'fb1':fb_tr[1], 'fb2':fb_tr[2], 'fb3':fb_tr[3], 'fb4':qt2,
+                          'fc1':fc_tr[1], 'fc2':fc_tr[2], 'fc3':fc_tr[3], 'fb5':qt3})
+
+    return x_train
+
+def structure_features_qpred2(X_train):
+    """
+    This function builds multiple features (by calling function 'buildfeatures()') from each well's bottom hole pressure
+    and stacks them horizontally into a new feature matrix.
+    :param X_train: matrix of bottom hole pressure (BHP), oil rate, and water rate
+    :return: matrix of constructed features convoluted BHP
+    """
+    t_train = X_train['TIME']
+
+    # Build features
+    fa_tr = buildfeature(t_train, X_train['WBHP:P1'])
+    fb_tr = buildfeature(t_train, X_train['WBHP:P2'])
+    fc_tr = buildfeature(t_train, X_train['WBHP:P3'])
+
+    # Arrange features
+    x_train = pd.DataFrame({'fa1':fa_tr[1], 'fa2':fa_tr[2], 'fa3':fa_tr[3],
+                          'fb1':fb_tr[1], 'fb2':fb_tr[2], 'fb3':fb_tr[3],
+                          'fc1':fc_tr[1], 'fc2':fc_tr[2], 'fc3':fc_tr[3]})
+
+    return x_train
+
+def structure_features_qpred3(X_train):
+    """
+    This function builds multiple features (by calling function 'buildfeatures()') from each well's bottom hole pressure
+    and stacks them horizontally into a new feature matrix.
+    :param X_train: matrix of bottom hole pressure (BHP), oil rate, and water rate
+    :return: matrix of constructed features convoluted BHP and total rate
+    """
+    t_train = X_train['TIME']
+    # Build features
+    fa_tr = buildfeature(t_train, X_train['WBHP:P1'])
+    fb_tr = buildfeature(t_train, X_train['WBHP:P2'])
+    fc_tr = buildfeature(t_train, X_train['WBHP:P3'])
+    qta = buildfeature(t_train, X_train['WOPR:P1'] + X_train['WWPR:P1'])
+    qtb = buildfeature(t_train, X_train['WOPR:P2'] + X_train['WWPR:P2'])
+    qtc = buildfeature(t_train, X_train['WOPR:P3'] + X_train['WWPR:P3'])
+
+    # Arrange features
+    x_train = pd.DataFrame({'fa1':fa_tr[1], 'fa2':fa_tr[2], 'fa3':fa_tr[3], 'fa4':qta[1], 'fa5':qta[2], 'fa6':qta[3],
+                          'fb1':fb_tr[1], 'fb2':fb_tr[2], 'fb3':fb_tr[3], 'fb4':qtb[1], 'fb5':qtb[2], 'fb6':qtb[3],
+                          'fc1':fc_tr[1], 'fc2':fc_tr[2], 'fc3':fc_tr[3], 'fc4':qtc[1], 'fc5':qtc[2], 'fc6':qtc[3]})
+    return x_train
+
+def structure_features_wcpred(X_train):
+    """
+    This function builds multiple features (by calling function 'buildfeatures()') from each well's bottom hole pressure
+    and stacks them horizontally into a new feature matrix.
+    :param X_train: matrix of bottom hole pressure
+    :return: matrix of constructed features
+    """
+    t_train = X_train['TIME']
+
+    # Build features
+    fa_tr = buildfeature(t_train, X_train['WBHP:P1'])
+    fb_tr = buildfeature(t_train, X_train['WBHP:P2'])
+    fc_tr = buildfeature(t_train, X_train['WBHP:P3'])
+    qt1 = X_train['WOPR:P1'] + X_train['WWPR:P1']
+    qt2 = X_train['WOPR:P2'] + X_train['WWPR:P2']
+    qt3 = X_train['WOPR:P3'] + X_train['WWPR:P3']
+
+    # Arrange features
+    x_train=pd.DataFrame({'fa1':fa_tr[1], 'fa2':fa_tr[2], 'fa3':fa_tr[3], 'fa4':qt1,
+                          'fb1':fb_tr[1], 'fb2':fb_tr[2], 'fb3':fb_tr[3], 'fb4':qt2,
+                          'fc1':fc_tr[1], 'fc2':fc_tr[2], 'fc3':fc_tr[3], 'fb5':qt3})
 
     return x_train
 
 def regression(x_train, y_train):
     """This function trains the data, performs hyperparameters search, and chooses the classifier
-    that gives the best cross-val score. This function returns the best performing classifier"""
+    that gives the best cross-val score. This function returns the classifier with best performing hyperparameter"""
 
-    clf=GridSearchCV(MLPRegressor(),
-                     [{'clf__hidden_layer_sizes':[(10,),(50,),(100,),(500,)],
-                       'clf__solver':['lbfgs']}],
-                     cv=3)
-    clf = GridSearchCV(Ridge(),[{'alpha':[0.01,0.1,1,10,100,1000]}], cv=3)
+    #clf = GridSearchCV(Ridge(), [{'alpha':[0.01,0.1,1,10,100,1000]}], cv=3)
 
+
+    classifiers = MLPRegressor(solver='lbfgs', activation='identity')
+    pipe=Pipeline([('scl', StandardScaler()),
+                   ('clf', classifiers)])
+    param_grid = [{'clf__hidden_layer_sizes':[(10,), (1000,),
+                                            (20,5), (20,20),
+                                            (100,50,100)]}]
+    clf = GridSearchCV(pipe, cv=4, param_grid=param_grid)
     clf.fit(x_train, y_train)
-    clf=clf.best_estimator_
+    clf = clf.best_estimator_
 
     return clf
 
-def build_pipe(X_train,y_train,X_test,y_test):
+def monte_carlo(X_train, Y_train, X_test, Y_test):
+    x_train = structure_features(X_train)
+    x_test = structure_features(X_test)
+
+    stds = [0, 0.1, 0.2, 0.3, 0.4, 0.5]
+    realizations = 50
+    test_acc_noises = np.zeros((realizations, len(stds)))
+    for i in range(realizations):
+        np.random.seed(i)
+        for j in range(len(stds)):
+            print('Standard Deviation: %f; Realization: %f' % (stds[j], i))
+            y_train = Y_train + np.random.normal(0, stds[j], (Y_train.shape[0], 1))*(Y_train)
+            y_test = Y_test + np.random.normal(0, stds[j], (Y_test.shape[0], 1))*(Y_test)
+
+            clf = MLPRegressor(solver='lbfgs', activation='identity', hidden_layer_sizes=(500, 200, 500))
+
+            pipe = Pipeline([('scl', StandardScaler()),
+                            ('clf', clf)])
+            pipe.fit(x_train, y_train)
+
+            test_score = pipe.score(x_test, y_test)
+            test_acc_noises[i, j] = test_score
+            print('Test set accuracy: %.3f \n' % test_score)
+
+    # Gaussian conf interval estimation
+    score_mean_gauss = []
+    gauss_high = []
+    gauss_low = []
+    for i in range(len(stds)):
+        score_mean_gauss.append(np.mean(test_acc_noises[:, i]))
+        gauss_high.append(np.mean(test_acc_noises[:, i]) - 1.96*np.std(test_acc_noises[:, i])/np.sqrt(realizations))
+        gauss_low.append(np.mean(test_acc_noises[:, i]) + 1.96*np.std(test_acc_noises[:, i])/np.sqrt(realizations))
+
+    # Plot realizations bootstrap sampling
+    x_ax = np.tile(np.asarray(stds), (realizations, 1))
+    plt.figure()
+    plt.scatter(x_ax, test_acc_noises)
+    plt.plot(stds, score_mean_gauss, 'r-', label='Mean')
+    plt.plot(stds, gauss_high, 'r--', label='95% confidence interval (Gaussian)')
+    plt.plot(stds, gauss_low, 'r--', label='95% confidence interval (Gaussian)')
+    plt.grid()
+    plt.xlabel('Standard Deviation')
+    plt.xlim([0, 0.5])
+    plt.ylabel('Test Score')
+
+    # Bootstrapping
+    score_mean = []
+    ci_high = []
+    ci_low = []
+    for i in range(len(stds)):
+        score_mean.append(np.mean(test_acc_noises[:,i])) # mean of scores at every noise level
+        ci=bootstrap.ci(test_acc_noises[:,i], scipy.mean) # bootstrapping 95% confidence interval of xi every k
+        ci_high.append(ci[0])
+        ci_low.append(ci[1])
+
+    # Plot realizations bootstrap sampling
+    x_ax = np.tile(np.asarray(stds),(realizations,1))
+    plt.figure()
+    plt.scatter(x_ax, test_acc_noises)
+    plt.plot(stds, score_mean, 'r-', label='Mean')
+    plt.plot(stds, ci_high, 'r--', label='95% confidence interval')
+    plt.plot(stds, ci_low, 'r--', label='95% confidence interval')
+    plt.grid()
+    plt.xlabel('Standard Deviation')
+    plt.xlim([0, 0.5])
+    plt.ylabel('Test Score')
+    return test_acc_noises
+
+def build_pipe(X_train, y_train, X_test, y_test):
     """
-    This function tests 10 different algorithms, performs greedy hyperparameters search
+    This function tests 10 different algorithms, performs greedy hyperparameter search
     on each of them, and stores the scores and classifiers into files.
-    Unfortunately, some functions require files that are not published online. 
-    
+    Unfortunately, some functions require files that are not published online.
+
     :param X_train: matrix of features in training set
     :param y_train: vector of label in training set
     :param X_test: matrix of features in test set
@@ -324,16 +487,16 @@ def build_pipe(X_train,y_train,X_test,y_test):
                  8: 'k-nearest Neighbors',
                  9: 'Neural Network'}
     classifiers = [Ridge(),
-                 KernelRidge(),
-                 SGDRegressor(),
-                 SVR(kernel='linear'),
-                 DecisionTreeRegressor(),
-                 RandomForestRegressor(),
-                 AdaBoostRegressor(),
-                 GradientBoostingRegressor(),
-                 KNeighborsRegressor(),
-                 MLPRegressor(solver='lbfgs',activation='identity')]
-    param_grid = [{'clf__alpha':[0.01,0.1,1,2,5,10,100,1000]},
+                   KernelRidge(),
+                   SGDRegressor(),
+                   SVR(kernel='linear'),
+                   DecisionTreeRegressor(),
+                   RandomForestRegressor(),
+                   AdaBoostRegressor(),
+                   GradientBoostingRegressor(),
+                   KNeighborsRegressor(),
+                   MLPRegressor(solver='lbfgs',activation='identity')]
+    param_grid=[{'clf__alpha':[0.01,0.1,1,2,5,10,100,1000]},
                 [{'clf__alpha':[0.01,0.1,1,2,5,10,100,1000],'clf__kernel':['linear']},{'clf__alpha':[0.1,0.1,1,10,100,1000],'clf__kernel':['polynomial'],'clf__degree':[2,3,5]}],
                 {'clf__alpha':[0.001,0.01,0.1,1,2,5,10,100,1000]},
                 [{'clf__C':[10000]}],
@@ -348,8 +511,8 @@ def build_pipe(X_train,y_train,X_test,y_test):
 
     for i in range(len(classifiers)):
         pipe = Pipeline([('scl', StandardScaler()),
-                       ('clf',classifiers[i])])
-        clf = GridSearchCV(pipe,cv=4,param_grid=param_grid[i])
+                       ('clf', classifiers[i])])
+        clf = GridSearchCV(pipe, cv=4, param_grid=param_grid[i])
         clf.fit(x_train, y_train)
         clf_list.append(clf.best_estimator_)
         cval_list.append(clf.best_score_)
@@ -378,18 +541,18 @@ def build_pipe(X_train,y_train,X_test,y_test):
     print('Classifier with best accuracy: %s' % pipe_dict[best_clf])
 
     # Saving clf details
-    dict_clf = pd.DataFrame.from_dict(OrderedDict([('Algorithms',[str(i) for i in clf_list])]))
+    dict_clf=pd.DataFrame.from_dict(OrderedDict([('Algorithms',[str(i) for i in clf_list])]))
     writer = pd.ExcelWriter('C:\\Users\\E460\\PycharmProjects\\untitled3\\Research\\results\\Far LowWC\\summary_clf_temp_'+scenario+'.xlsx', engine='xlsxwriter')
     dict_clf.to_excel(writer, index=False)
     writer.save()
 
     # Constructing DataFrame output
     dict_sum = OrderedDict([('Algorithms',[i for i in pipe_dict.values()]),
-                          ('Training Set Accuracy',train_score),
-                          ('Dev Set Accuracy',cval_list),
-                          ('Test Set Accuracy',test_score)])
-    df = pd.DataFrame.from_dict(dict_sum)
-    bar_chart(df,'C:\\Users\\E460\\PycharmProjects\\untitled3\\Research\\results\\Far LowWC\\'+scenario+'.png')
+                          ('Training Set Accuracy', train_score),
+                          ('Dev Set Accuracy', cval_list),
+                          ('Test Set Accuracy', test_score)])
+    df=pd.DataFrame.from_dict(dict_sum)
+    bar_chart(df,'C:\\Users\\E460\\PycharmProjects\\untitled3\\Research\\results\\Far LowWC\\' + scenario+'.png')
 
     writer = pd.ExcelWriter('C:\\Users\\E460\\PycharmProjects\\untitled3\\Research\\results\\Far LowWC\\summary_report_temp_'+scenario+'.xlsx', engine='xlsxwriter')
     df.to_excel(writer, index=False)
@@ -397,20 +560,20 @@ def build_pipe(X_train,y_train,X_test,y_test):
 
     # Plot and print p, q, and der in train and dev set
     for i in range(len(clf_list)):
-        x_train_train,x_dev,y_train_train,y_dev=train_test_split(x_train,y_train,test_size=0.25,shuffle=False)
-        y_pred_train=clf_list[i].predict(x_train_train)
-        y_pred_dev=clf_list[i].predict(x_dev)
-        y_pred_test=clf_list[i].predict(x_test)
+        x_train_train, x_dev, y_train_train, y_dev = train_test_split(x_train, y_train, test_size=0.25, shuffle=False)
+        y_pred_train = clf_list[i].predict(x_train_train)
+        y_pred_dev = clf_list[i].predict(x_dev)
+        y_pred_test = clf_list[i].predict(x_test)
 
         # Plot and print Training Data (P and Q)
-        plot_pressure_rates(X_train,pd.concat([y_train_train,y_dev],axis=0,join='inner'),
-                            np.concatenate((y_pred_train,y_pred_dev),axis=0),
+        plot_pressure_rates(X_train, pd.concat([y_train_train, y_dev], axis=0, join='inner'),
+                            np.concatenate((y_pred_train, y_pred_dev), axis=0),
                             labelname='Training Data')
         plt.savefig('C:\\Users\\E460\\PycharmProjects\\untitled3\\Research\\results\\Far LowWC\\P and Q\\'+scenario+'\\'+pipe_dict[i]+'_train.png',
                     bbox_inches="tight")
 
         # Plot and print Test Data (P and Q)
-        plot_pressure_rates(X_test,y_test.loc[:,['WBHP:P1']],y_pred_test,labelname='Test Data')
+        plot_pressure_rates(X_test, y_test.loc[:, ['WBHP:P1']], y_pred_test, labelname='Test Data')
         plt.savefig('C:\\Users\\E460\\PycharmProjects\\untitled3\\Research\\results\\Far LowWC\\P and Q\\'+scenario+'\\'+pipe_dict[i]+'_test.png',
                     bbox_inches="tight")
 
@@ -421,7 +584,120 @@ def build_pipe(X_train,y_train,X_test,y_test):
 
     return df
 
-def bar_chart(df, filename):
+def build_pipe_noise(X_train,Y_train,X_test,Y_test):
+    stds = [0, 0.1, 0.2, 0.3, 0.4, 0.5]
+    test_acc_noises = np.zeros((10, len(stds)))
+    x_train = structure_features(X_train)
+    x_test = structure_features(X_test)
+    np.random.seed(123)
+    for j in range(len(stds)):
+        y_train=Y_train+np.random.normal(0, stds[j], (Y_train.shape[0], 1))*(Y_train)
+        y_test=Y_test+np.random.normal(0, stds[j], (Y_test.shape[0], 1))*(Y_test)
+
+        cval_list = []
+        clf_list = []
+        train_score = []
+        test_score = []
+        scenario = 'noise '+str(stds[j])
+        pipe_dict = {0: 'Ridge Regression',
+                     1: 'Kernel Ridge Regression',
+                     2: 'SGD Regression',
+                     3: 'Support Vector Regression',
+                     4: 'Decision Tree',
+                     5: 'Random Forest',
+                     6: 'AdaBoost',
+                     7: 'Gradient Boosting',
+                     8: 'k-nearest Neighbors',
+                     9: 'Neural Network'}
+        classifiers=[Ridge(),
+                     KernelRidge(),
+                     SGDRegressor(),
+                     SVR(kernel='linear'),
+                     DecisionTreeRegressor(),
+                     RandomForestRegressor(),
+                     AdaBoostRegressor(),
+                     GradientBoostingRegressor(),
+                     KNeighborsRegressor(),
+                     MLPRegressor(solver='lbfgs',activation='identity')]
+        param_grid=[{'clf__alpha':[0.01,0.1,1,2,5,10,100,1000]},
+                    [{'clf__alpha':[0.01,0.1,1,2,5,10,100,1000],'clf__kernel':['linear']},{'clf__alpha':[0.01,0.1,0.1,1,10,100,1000],'clf__kernel':['polynomial'],'clf__degree':[2,3,5]}],
+                    {'clf__alpha':[0.001,0.01,0.1,1,2,5,10,100,1000]},
+                    [{'clf__C':[0.01,0.1,1,10,100,1000,10000]}],
+                    {'clf__max_depth': [None, 5, 10, 30, 50]},
+                    [{'clf__n_estimators':[2, 3, 5, 10, 20, 50, 100],'clf__max_depth': [None, 5, 10, 20, 30, 50]}],
+                    {'clf__n_estimators':[2, 5, 10, 20, 50, 100]},
+                    [{'clf__n_estimators':[2, 5, 10, 20, 50, 100],'clf__max_depth': [None, 5, 10, 20, 30, 50]}],
+                    {'clf__n_neighbors':[2, 3, 5, 10, 20, 50]},
+                    {'clf__hidden_layer_sizes':[(10,),(20,),(50,),(100,),(1000,),
+                                                (20,5),(20,20),(20,5,10),(20,5,20),(50,10,20),
+                                                (100,20,50),(1000,50,100),(1000,200,1000),(1000,50,400,600)]}]
+
+        for i in range(len(classifiers)):
+            pipe=Pipeline([('scl', StandardScaler()),
+                           ('clf',classifiers[i])])
+            clf=GridSearchCV(pipe,cv=4,param_grid=param_grid[i])
+            clf.fit(x_train, y_train)
+            clf_list.append(clf.best_estimator_)
+            cval_list.append(clf.best_score_)
+            joblib.dump(clf.best_estimator_,
+                        'C:\\Users\\E460\\PycharmProjects\\untitled3\\Research\\results\\Close HighWC\\noise2\\classifiers\\'+scenario+'\\'+pipe_dict[i]+'.pkl')
+
+            # Print scores
+            train_score.append(clf.score(x_train, Y_train))
+            test_score.append(clf.score(x_test, Y_test))
+            print('%s training set accuracy: %.3f' % (pipe_dict[i], train_score[i]))
+            print('%s dev set accuracy: %.3f' % (pipe_dict[i], cval_list[i]))
+            print('%s test set accuracy: %.3f \n' % (pipe_dict[i], test_score[i]))
+            test_acc_noises[i,j]=test_score[i]
+
+        # Identify the most accurate model on test data
+        best_acc = 0.0
+        best_clf = 0
+        best_pipe = ''
+        for idx, val in enumerate(clf_list):
+            if val.score(x_test, Y_test) > best_acc:
+                best_acc = val.score(x_test, Y_test)
+                best_pipe = val
+                best_clf = idx
+        print('Classifier with best accuracy: %s' % pipe_dict[best_clf])
+
+        # Constructing DataFrame output
+        dict_sum=OrderedDict([('Algorithms',[i for i in pipe_dict.values()]),
+                              ('Training Set Accuracy',train_score),
+                              ('Dev Set Accuracy',cval_list),
+                              ('Test Set Accuracy',test_score)])
+        df=pd.DataFrame.from_dict(dict_sum)
+        bar_chart(df,'C:\\Users\\E460\\PycharmProjects\\untitled3\\Research\\results\\Close HighWC\\noise2\\bar_chart std '+scenario+'.png')
+
+        writer = pd.ExcelWriter('C:\\Users\\E460\\PycharmProjects\\untitled3\\Research\\results\\Close HighWC\\noise2\\summary_report_temp_'+scenario+'.xlsx', engine='xlsxwriter')
+        df.to_excel(writer, index=False)
+        writer.save()
+
+        # Plot and print p, q, and der in train and dev set
+        for i in range(len(clf_list)):
+            x_train_train,x_dev,y_train_train,y_dev=train_test_split(x_train,y_train,test_size=0.25,shuffle=False)
+            y_pred_train=clf_list[i].predict(x_train_train)
+            y_pred_dev=clf_list[i].predict(x_dev)
+            y_pred_test=clf_list[i].predict(x_test)
+
+            # Plot and print Training Data (P and Q)
+            plot_pressure_rates(X_train, pd.concat([y_train_train,y_dev], axis=0, join='inner'),
+                                np.concatenate((y_pred_train, y_pred_dev), axis=0),
+                                labelname='Training Data')
+            plt.savefig('C:\\Users\\E460\\PycharmProjects\\untitled3\\Research\\results\\Close HighWC\\noise2\\P and Q\\'+scenario+'\\'+pipe_dict[i]+'_train.png',
+                        bbox_inches="tight")
+
+            # Plot and print Test Data (P and Q)
+            plot_pressure_rates(X_test, y_test.loc[:,['WBHP:P1']], y_pred_test,labelname='Test Data')
+            plt.savefig('C:\\Users\\E460\\PycharmProjects\\untitled3\\Research\\results\\Close HighWC\\noise2\\P and Q\\'+scenario+'\\'+pipe_dict[i]+'_test.png',
+                        bbox_inches="tight")
+
+            # Plot and print derivatives
+            derivatives2(clf_list[i], X_test, x_test, y_test)
+            plt.savefig('C:\\Users\\E460\\PycharmProjects\\untitled3\\Research\\results\\Close HighWC\\noise2\\derivatives\\'+scenario+'\\'+pipe_dict[i]+'.png',
+                        bbox_inches="tight")
+
+def bar_chart(df,filename):
     """This function obtains scores from a csv file and visualizes them in a bar chart"""
     n_groups = df.shape[0]
     index_df = df.loc[:,['Algorithms']]
@@ -453,65 +729,65 @@ def bar_chart(df, filename):
     plt.xlim([0,1])
     plt.yticks(index + bar_width, index_name)
     plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.105),
-               fancybox=True, shadow=True, ncol=5,fontsize=9)
+               fancybox=True, shadow=True, ncol=5, fontsize=9)
     plt.tight_layout()
     plt.show()
-    plt.savefig(filename,bbox_inches="tight")
+    plt.savefig(filename, bbox_inches="tight")
 
 def derivatives(clf):
     """Calculates pressure derivatives given a classifier"""
     df = pd.read_csv('C:\\Users\\E460\\PycharmProjects\\untitled3\\Research\\csv files\\derivatives.csv')
     t = df.loc[:,['TIME']].as_matrix() # Time in simulation: DAY
-    t* = 24 # Converting time from DAY to HOUR
-    x_test_der=df.loc[:,['fa1', 'fa2', 'fa3','fa4','fa10','faw1', 'faw2', 'faw3','faw4','faw10',
+    t *= 24 # Converting time from DAY to HOUR
+    x_test_der = df.loc[:,['fa1', 'fa2', 'fa3','fa4','fa10','faw1', 'faw2', 'faw3','faw4','faw10',
                          'fb1', 'fb2', 'fb3','fb4', 'fb10','fbw1', 'fbw2', 'fbw3','fbw4', 'fbw10',
                          'fc1', 'fc2', 'fc3','fc4', 'fc10','fcw1', 'fcw2', 'fcw3','fcw4', 'fcw10']]
 
-    p_pred=clf.predict(x_test_der)
+    p_pred = clf.predict(x_test_der)
 
     # Delta Pressure
     p_act = df.loc[:,['WBHP:P1']].as_matrix()
+    dp_act = abs(p_act[0] - p_act)
+    dp_pred = abs(p_act[0] - p_pred)
+
+    # Derivatives
+    p_der_act = np.zeros(len(p_act)-2)
+    p_der_pred = np.zeros(len(p_pred)-2)
+    for i in range(1, len(p_act)-1):
+        p_der_act[i-1] = t[i]/(t[i+1]-t[i-1])*abs(dp_act[i+1]-dp_act[i-1])
+        p_der_pred[i-1] = t[i]/(t[i+1]-t[i-1])*abs(dp_pred[i+1]-dp_pred[i-1])
+    plot_derivatives(t, dp_act, dp_pred, p_der_act, p_der_pred)
+
+
+    # Plot Test Data (P and Q)
+    plot_pressure_rates(df, df.loc[:,['WBHP:P1']], p_pred, labelname='Testing')
+
+def derivatives2(clf,X_test,x_test,y_test):
+    """This function calculates pressure derivatives given a classifier"""
+    t = X_test['TIME']
+    p_pred = clf.predict(x_test)
+
+    # Delta Pressure
+    p_act= y_test.as_matrix()
     dp_act = abs(p_act[0]-p_act)
-    dp_pred = abs(p_act[0]-p_pred)
+    dp_pred = abs(p_pred[0]-p_pred)
 
     # Derivatives
     p_der_act = np.zeros(len(p_act)-2)
     p_der_pred = np.zeros(len(p_pred)-2)
     for i in range(1,len(p_act)-1):
-        p_der_act[i-1]=t[i]/(t[i+1]-t[i-1])*abs(dp_act[i+1]-dp_act[i-1])
-        p_der_pred[i-1]=t[i]/(t[i+1]-t[i-1])*abs(dp_pred[i+1]-dp_pred[i-1])
-    plot_derivatives(t,dp_act,dp_pred,p_der_act,p_der_pred)
-
-
-    # Plot Test Data (P and Q)
-    plot_pressure_rates(df,df.loc[:,['WBHP:P1']],p_pred,labelname='Testing')
-
-def derivatives2(clf, X_test, x_test, y_test):
-    """This function calculates pressure derivatives given a classifier"""
-    t=X_test['TIME']
-    p_pred=clf.predict(x_test)
-
-    # Delta Pressure
-    p_act=y_test.as_matrix()
-    dp_act=abs(p_act[0]-p_act)
-    dp_pred=abs(p_pred[0]-p_pred)
-
-    # Derivatives
-    p_der_act=np.zeros(len(p_act)-2)
-    p_der_pred=np.zeros(len(p_pred)-2)
-    for i in range(1,len(p_act)-1):
-        p_der_act[i-1]=t[i]/(t[i+1]-t[i-1])*abs(dp_act[i+1]-dp_act[i-1])
-        p_der_pred[i-1]=t[i]/(t[i+1]-t[i-1])*abs(dp_pred[i+1]-dp_pred[i-1])
-    plot_derivatives(t,dp_act,dp_pred,p_der_act,p_der_pred)
+        p_der_act[i-1] = t[i]/(t[i+1] - t[i-1])*abs(dp_act[i+1] - dp_act[i-1])
+        p_der_pred[i-1] = t[i]/(t[i+1] - t[i-1])*abs(dp_pred[i+1] - dp_pred[i-1])
+    plot_derivatives(t, dp_act, dp_pred, p_der_act, p_der_pred)
 
 def plot_derivatives(t,dp_act,dp_pred,p_der_act,p_der_pred):
     """This function plots delta pressure and the derivative & shows comparison between actual data and
     prediction result"""
     plt.figure()
-    plt.loglog(t, dp_act, 'k-',linewidth=3,label='Actual dP')
-    plt.loglog(t, dp_pred, 'ro',label='Predicted dP')
-    plt.loglog(t[1:-1], p_der_act, 'k*',linewidth=3,label='Actual Derivative')
-    plt.loglog(t[1:-1], p_der_pred, 'gx',label='Predicted Derivative')
+    plt.loglog(t, dp_act, 'k-', linewidth=3, label='Actual dP')
+    plt.loglog(t, dp_pred, 'ro', label='Predicted dP')
+    plt.loglog(t[1:-1], p_der_act, 'k*', linewidth=3, label='Actual Derivative')
+    plt.loglog(t[1:-1], p_der_pred, 'gx', label='Predicted Derivative')
     plt.ylim(1,5000)
     plt.xlabel('dt (hours)')
     plt.ylabel('dP & Derivative')
@@ -522,33 +798,69 @@ def plot_derivatives(t,dp_act,dp_pred,p_der_act,p_der_pred):
 def plot_pressure(t, p_actual, p_pred, title, color):
     """This function plots actual and predicted bottom hole pressure"""
     # Plotting pwf v time
-    plt.plot(t, p_actual, 'k-',linewidth=3,label='Actual Pwf')
+    plt.plot(t, p_actual, 'k-', linewidth=3, label='Actual Pwf')
 
-    if title == 'Training Data':
-        plt.plot(t[0:int(0.7*p_pred.shape[0])], p_pred[0:int(0.7*p_pred.shape[0])], 'rx',markeredgecolor=color,label=title)
-        plt.plot(t[int(0.7*p_pred.shape[0]):], p_pred[int(0.7*p_pred.shape[0]):], 'yx',markeredgecolor='orange',label='Dev Set')
+    if title=='Training Data':
+        plt.plot(t[0:int(0.7*p_pred.shape[0])], p_pred[0:int(0.7*p_pred.shape[0])], 'rx', markeredgecolor=color, label=title)
+        plt.plot(t[int(0.7*p_pred.shape[0]):], p_pred[int(0.7*p_pred.shape[0]):], 'yx', markeredgecolor='orange', label='Dev Set')
     else:
         plt.plot(t, p_pred, 'gx',markeredgecolor=color,label=title)
     plt.xlabel("Time (hours)")
     plt.ylabel("BH Pressure (psi)", fontsize=9)
-    plt.title("BH Pressure Well A",y=1, fontsize=9)
+    plt.title("BH Pressure Well A", y=1, fontsize=9)
     plt.legend(loc="best", prop=dict(size=8))
-    plt.xlim(0,max(t))
-    plt.ylim(0, max(max(p_actual.values),max(p_pred)))
+    plt.xlim(0, max(t))
+    plt.ylim(0, max(max(p_actual.values), max(p_pred)))
+    plt.grid(True)
+
+def plot_pred_rate(t, q_actual, q_pred, title, color):
+    """This function plots actual and predicted bottom hole pressure"""
+    # Plotting pwf v time
+    plt.plot(t, q_actual, 'k-', linewidth=3, label='Actual qo')
+
+    if title=='Training Data':
+        plt.plot(t[0:int(0.7 * q_pred.shape[0])], q_pred[0:int(0.7 * q_pred.shape[0])], 'rx', markeredgecolor=color, label=title)
+        plt.plot(t[int(0.7 * q_pred.shape[0]):], q_pred[int(0.7 * q_pred.shape[0]):], 'yx', markeredgecolor='orange', label='Dev Set')
+    else:
+        plt.plot(t, q_pred, 'gx', markeredgecolor=color, label=title)
+    plt.xlabel("Time (hours)")
+    plt.ylabel("Flow Rate (STB/d)", fontsize=9)
+    plt.title("Flow Rate Well A", y=1, fontsize=9)
+    plt.legend(loc="best", prop=dict(size=8))
+    plt.xlim(0, max(t))
+    plt.ylim(0, max(max(q_actual.values), max(q_pred)))
+    plt.grid(True)
+
+def plot_pred_wc(t, q_actual, q_pred, title, color):
+    """This function plots actual and predicted water cut"""
+    # Plotting pwf v time
+    plt.plot(t, q_actual, 'k-', linewidth=3, label='Actual WC')
+
+    if title=='Training Data':
+        plt.plot(t[0:int(0.7 * q_pred.shape[0])], q_pred[0:int(0.7 * q_pred.shape[0])], 'rx', markeredgecolor=color, label=title)
+        plt.plot(t[int(0.7 * q_pred.shape[0]):], q_pred[int(0.7 * q_pred.shape[0]):], 'yx', markeredgecolor='orange', label='Dev Set')
+    else:
+        plt.plot(t, q_pred, 'gx', markeredgecolor=color, label=title)
+    plt.xlabel("Time (hours)")
+    plt.ylabel("Water Cut", fontsize=9)
+    plt.title("Water Cut", y=1, fontsize=9)
+    plt.legend(loc="best", prop=dict(size=8))
+    plt.xlim(0, max(t))
+    plt.ylim(0, max(max(q_actual.values), max(q_pred)))
     plt.grid(True)
 
 def plot_rates(t,q,wellname,color):
     """This function plots actual flow rates"""
     # Plotting Flow Rate v time
-    plt.plot(t, q,color, linewidth=3)
+    plt.plot(t, q, color, linewidth=3)
     plt.xlabel("Time (hours)")
     plt.ylabel("Flow Rate (STB/D)", fontsize=9)
-    plt.title('Flow Rate Well '+wellname,y=0.82, fontsize=9)
-    plt.xlim(0,max(t))
-    plt.ylim(0,max(q)+10)
+    plt.title('Flow Rate Well '+wellname, y=0.82, fontsize=9)
+    plt.xlim(0, max(t))
+    plt.ylim(0, max(q) + 10)
     plt.grid(True)
 
-def plot_pressure_rates(x, y, y_pred, labelname,filename='default'):
+def plot_pressure_rates(x, y, y_pred, labelname):
     """This function plots both pressure and actual flow rates"""
     plt.figure()
     if labelname=='Training Data':
@@ -560,31 +872,37 @@ def plot_pressure_rates(x, y, y_pred, labelname,filename='default'):
     plot_pressure(x['TIME'], y, y_pred, labelname, color)
 
     plt.subplot(412)
-    plot_rates(x['TIME'],x['WWPR:P1'],wellname='A',color='blue')
-    plot_rates(x['TIME'],x['WOPR:P1'],wellname='A',color='green')
+    plot_rates(x['TIME'], x['WOPR:P1'], wellname='A', color='green')
+    plot_rates(x['TIME'], x['WWPR:P1'], wellname='A', color='blue')
 
     plt.subplot(413)
-    plot_rates(x['TIME'],x['WWPR:P2'],wellname='B',color='blue')
-    plot_rates(x['TIME'],x['WOPR:P2'],wellname='B',color='green')
-
+    plot_rates(x['TIME'], x['WOPR:P2'],wellname='B',color='green')
+    plot_rates(x['TIME'], x['WWPR:P2'],wellname='B',color='blue')
 
     plt.subplot(414)
-    plot_rates(x['TIME'],x['WWPR:P3'],wellname='C',color='blue')
-    plot_rates(x['TIME'],x['WOPR:P3'],wellname='C',color='green')
-    plt.subplots_adjust(top=1.5,bottom=0.2)
+    plot_rates(x['TIME'], x['WOPR:P3'], wellname='C', color='green')
+    plot_rates(x['TIME'], x['WWPR:P3'], wellname='C', color='blue')
+
+    #plt.subplots_adjust(top=1.5,bottom=0.2)
 
 
 def main():
+    ### BHP PREDICTION ###
     # Load Training and Test Set
-    X_train,Y_train=load_data('https://raw.githubusercontent.com/titaristanto/data-driven-production-problem/master/far_lowWC_training.csv')
-    X_test,y_test=load_data('https://raw.githubusercontent.com/titaristanto/data-driven-production-problem/master/close_highWC_test.csv')
+    t_train, qo_train, qw_train, wc_train, p_train = load_data('close_highWC_training.csv')
+    X_train, Y_train = pd.concat([t_train, qo_train, qw_train, wc_train], axis=1, join='inner'), p_train.loc[:, ['WBHP:P1']]
+    t_test, qo_test, qw_test, wc_test, p_test = load_data('close_highWC_test.csv')
+    X_test, y_test = pd.concat([t_test, qo_test, qw_test, wc_test], axis=1, join='inner'), p_test.loc[:, ['WBHP:P1']]
 
     # Build and select features
-    x_train_temp=structure_features(X_train)
-    x_test=structure_features(X_test)
+    x_train_temp = structure_features(X_train)
+    x_test = structure_features(X_test)
 
     # Split train and dev set
-    x_train,x_dev,y_train,y_dev=train_test_split(x_train_temp,Y_train,test_size=0.25,shuffle=False)
+    x_train, x_dev, y_train, y_dev = train_test_split(x_train_temp,
+                                                      Y_train,
+                                                      test_size=0.25,
+                                                      shuffle=False)
 
     # Train the data
     start_time = time.time()
@@ -600,35 +918,106 @@ def main():
 
     ## Error Calculation
     # Training Data Error Calculation
-    print('Training Set Score: %1.4f' % (clf.score(x_train,y_train)))
+    print('Training Set Score: %1.4f' % (clf.score(x_train, y_train)))
 
     # Cross-val / Dev Set Error Calculation
-    scores = cross_val_score(clf, x_train, y_train, cv=4)
-    print("Dev Set Score (Cval): {:.3f} (std: {:.3f})".format(scores.mean(),scores.std()),end="\n\n" )
-    # [float(score) for score in scores] # printing each fold score
-    print('Dev Set Score: %1.4f' % (clf.score(x_dev,y_dev)))
+    print('Dev Set Score: %1.4f' % (clf.score(x_dev, y_dev)))
 
     # Test Data Error Calculation
-    print('Test Set Score: %1.4f' % (clf.score(x_test,y_test)))
+    print('Test Set Score: %1.4f' % (clf.score(x_test, y_test)))
 
     # Plot Training Data (P and Q)
     plot_pressure_rates(X_train,
-                        pd.concat([y_train,y_dev],axis=0,join='inner'),
-                        np.concatenate((y_pred_train,y_pred_dev),axis=0),
+                        pd.concat([y_train, y_dev], axis=0,join='inner'),
+                        np.concatenate((y_pred_train ,y_pred_dev), axis=0),
                         labelname='Training Data')
 
     # Plot Test Data (P and Q)
-    plot_pressure_rates(X_test,y_test,y_pred_test,labelname='Test Data')
+    plot_pressure_rates(X_test, y_test, y_pred_test, labelname='Test Data')
 
     # Pipeline Analysis
-    alg_sum=build_pipe(X_train,Y_train,X_test,y_test)
+    alg_sum = build_pipe(X_train, Y_train, X_test, y_test)
     print(alg_sum)
-
-    # Plot Derivatives
-    #derivatives(clf)
 
     # Load Classifier from file
     # clf = joblib.load('filename.pkl')
 
+    ### FLOW RATE PREDICTION ###
+    X_train, Y_train = pd.concat([t_train, p_train, qw_train, wc_train, qo_train], axis=1, join='inner'), qo_train.loc[:, ['WOPR:P1']]
+    X_test, y_test = pd.concat([t_test, p_test, qw_test, wc_test, qo_test], axis=1, join='inner'), qo_test.loc[:, ['WOPR:P1']]
+
+    # Build and select features
+    x_train_temp = structure_features_qpred(X_train)
+    x_test = structure_features_qpred(X_test)
+
+    # Split train and dev set
+    x_train, x_dev, y_train, y_dev = train_test_split(x_train_temp,
+                                                      Y_train,
+                                                      test_size=0.25,
+                                                      shuffle=False)
+
+    # Train the data
+    start_time = time.time()
+    clf = regression(x_train, y_train)
+
+    # Predict features
+    y_pred_train = clf.predict(x_train)
+    y_pred_dev = clf.predict(x_dev)
+    y_pred_test = clf.predict(x_test)
+
+    # Measure running time
+    print("Completed in %s seconds" % (time.time() - start_time))
+
+    ## Error Calculation
+    # Training Data Error Calculation
+    print('Training Set Score: %1.4f' % (clf.score(x_train, y_train)))
+
+    # Cross-val / Dev Set Error Calculation
+    print('Dev Set Score: %1.4f' % (clf.score(x_dev, y_dev)))
+
+    # Test Data Error Calculation
+    print('Test Set Score: %1.4f' % (clf.score(x_test, y_test)))
+
+    plt.figure()
+    plot_pred_rate(X_test['TIME'], y_test, y_pred_test, 'qo pred', 'green')
+
+    ### WATER CUT PREDICTION ###
+    X_train, Y_train = pd.concat([t_train, p_train, qw_train, wc_train, qo_train], axis=1, join='inner'), wc_train.loc[:, ['WWCT:P1']]
+    X_test, y_test = pd.concat([t_test, p_test, qw_test, wc_test, qo_test], axis=1, join='inner'), wc_test.loc[:, ['WWCT:P1']]
+
+    # Build and select features
+    x_train_temp = structure_features_qpred(X_train)
+    x_test = structure_features_qpred(X_test)
+
+    # Split train and dev set
+    x_train, x_dev, y_train, y_dev = train_test_split(x_train_temp,
+                                                      Y_train,
+                                                      test_size=0.25,
+                                                      shuffle=False)
+
+    # Train the data
+    start_time = time.time()
+    clf = regression(x_train, y_train)
+
+    # Predict features
+    y_pred_train = clf.predict(x_train)
+    y_pred_dev = clf.predict(x_dev)
+    y_pred_test = clf.predict(x_test)
+
+    # Measure running time
+    print("Completed in %s seconds" % (time.time() - start_time))
+
+    ## Error Calculation
+    # Training Data Error Calculation
+    print('Training Set Score: %1.4f' % (clf.score(x_train, y_train)))
+
+    # Cross-val / Dev Set Error Calculation
+    print('Dev Set Score: %1.4f' % (clf.score(x_dev, y_dev)))
+
+    # Test Data Error Calculation
+    print('Test Set Score: %1.4f' % (clf.score(x_test, y_test)))
+
+    plt.figure()
+    plot_pred_wc(X_test['TIME'], y_test, y_pred_test, 'qo pred', 'green')
 if __name__ == '__main__':
     main()
